@@ -1,10 +1,5 @@
 # Sales-Metrics-Trends-with-PostgreSQL
 
-# Sales-Analysis-MYSQL
-
-
-
-
 ## 1. Markets Operated by "Atliq Exclusive" in the APAC Region 
 ### Query:
 ```sql
@@ -104,37 +99,32 @@ ORDER BY PRODUCT_COUNT DESC;
 
 ### Query:  
 ```sql
-WITH TABLE_VIEW AS 
-(
-	SELECT SEGMENT , PRODUCT_CODE , FISCAL_YEAR
+WITH table_view AS (
+    SELECT segment, product_code, fiscal_year
     FROM dim_product
-    JOIN fact_sales_monthly USING(PRODUCT_CODE)
-),
- 
-product_count_2020 AS 
-(
-	SELECT SEGMENT, COUNT(PRODUCT_CODE) AS PRODUCT_COUNT2020
-    FROM TABLE_VIEW
-    WHERE FISCAL_YEAR = 2020
-    GROUP BY SEGMENT
-),
-
-product_count_2021 AS 
-(
-	SELECT SEGMENT, COUNT(PRODUCT_CODE) AS PRODUCT_COUNT2021
-    FROM TABLE_VIEW
-    WHERE FISCAL_YEAR = 2021
-    GROUP BY SEGMENT
-),
-PRODUCT_COUNT_2020_2021 AS
-(
-	SELECT *
-    FROM product_count_2021
-    JOIN product_count_2020 USING(SEGMENT)
+    JOIN fact_sales_monthly USING (product_code)
+), 
+product_count_2020 AS (
+    SELECT segment, COUNT(product_code) AS product_count2020
+    FROM table_view
+    WHERE fiscal_year = 2020
+    GROUP BY segment
+), 
+product_count_2021 AS (
+    SELECT segment, COUNT(product_code) AS product_count2021
+    FROM table_view
+    WHERE fiscal_year = 2021
+    GROUP BY segment
+), 
+product_count_2020_2021 AS (
+    SELECT p21.segment, p21.product_count2021, p20.product_count2020
+    FROM product_count_2021 p21
+    LEFT JOIN product_count_2020 p20 USING (segment)
 )
 
-SELECT *, PRODUCT_COUNT2021 - PRODUCT_COUNT2020 AS DIFFERENCE
-FROM PRODUCT_COUNT_2020_2021;
+SELECT *, product_count2021 - COALESCE(product_count2020, 0) AS difference
+FROM product_count_2020_2021;
+
 ```
 
 ### Output:  
@@ -162,31 +152,32 @@ FROM PRODUCT_COUNT_2020_2021;
 
 ### Query:  
 ```sql
-WITH TABLE_VIEW AS (
+WITH table_view AS (
     SELECT product_code, product, manufacturing_cost
     FROM dim_product
-    JOIN fact_manufacturing_cost USING(product_code)
+    JOIN fact_manufacturing_cost USING (product_code)
 ),
-MAX_COST AS (
-    SELECT product, MAX(manufacturing_cost) AS MAX_manufacturing_cost
-    FROM TABLE_VIEW
+max_cost AS (
+    SELECT product, MAX(manufacturing_cost) AS max_manufacturing_cost
+    FROM table_view
     GROUP BY product
 ),
-MIN_COST AS (
-    SELECT product, MIN(manufacturing_cost) AS MIN_manufacturing_cost
-    FROM TABLE_VIEW
+min_cost AS (
+    SELECT product, MIN(manufacturing_cost) AS min_manufacturing_cost
+    FROM table_view
     GROUP BY product
 ),
-MAX_MIN_manufacturing_cost AS (
+max_min_manufacturing_cost AS (
     SELECT * 
-    FROM MIN_COST 
-    JOIN MAX_COST USING(product) 
+    FROM min_cost 
+    JOIN max_cost USING (product) 
 )
 
-SELECT DISTINCT product, product_code,
-       CONCAT(MIN_manufacturing_cost, " - ", MAX_manufacturing_cost) AS MAX_MIN_COST
-FROM TABLE_VIEW
-JOIN MAX_MIN_manufacturing_cost USING(product);
+SELECT DISTINCT t.product, t.product_code,
+       min_manufacturing_cost || ' - ' || max_manufacturing_cost AS max_min_cost
+FROM table_view t
+JOIN max_min_manufacturing_cost mmmc USING (product);
+
 ```
 
 ### Output:  
@@ -224,10 +215,10 @@ WITH main_table AS (
            a.market, 
            b.fiscal_year,
            b.pre_invoice_discount_pct
-    FROM dim_customer AS a
-    JOIN fact_pre_invoice_deductions AS b 
+    FROM dim_customer a
+    JOIN fact_pre_invoice_deductions b 
     ON a.customer_code = b.customer_code
-    WHERE a.market = "India" AND b.fiscal_year = 2021
+    WHERE a.market = 'India' AND b.fiscal_year = 2021
 )
 SELECT 
     customer_code, 
@@ -237,6 +228,7 @@ FROM main_table
 GROUP BY customer_code, customer
 ORDER BY average_discount_percentage DESC
 LIMIT 5;
+
 ```
 
 ### Output:  
@@ -265,25 +257,26 @@ This report provides an overview of the **gross sales amount** for "Atliq Exclus
 
 ### Query:  
 ```sql
-WITH MAIN_TABLE AS (
-    SELECT CUSTOMER,
+WITH main_table AS (
+    SELECT customer,
            customer_code,
            product_code,
-           `date`,
+           date,
            gross_price,
            sold_quantity
     FROM dim_customer
-    JOIN fact_sales_monthly USING(customer_code)
-    JOIN fact_gross_price USING(product_code)
+    JOIN fact_sales_monthly USING (customer_code)
+    JOIN fact_gross_price USING (product_code)
     WHERE customer = 'Atliq Exclusive'
 )
 SELECT 
-    MONTH(`DATE`) AS `MONTH`,
-    YEAR(`DATE`) AS `YEAR`,
-    SUM(sold_quantity * GROSS_PRICE) AS Gross_SALES_AMOUNT
-FROM MAIN_TABLE
-GROUP BY `MONTH`, `YEAR`
-ORDER BY `YEAR`, `MONTH`;
+    EXTRACT(MONTH FROM date) AS month,
+    EXTRACT(YEAR FROM date) AS year,
+    SUM(sold_quantity * gross_price) AS gross_sales_amount
+FROM main_table
+GROUP BY month, year
+ORDER BY year, month;
+
 ```
 
 ### Output:  
@@ -332,22 +325,23 @@ This report identifies the **quarter with the highest total sold quantity** in t
 
 ### Query:  
 ```sql
-WITH MAIN_TABLE AS (
-    SELECT fiscal_year, sold_quantity, MONTH(`DATE`) AS `MONTH`
-    FROM FACT_SALES_MONTHLY
+WITH main_table AS (
+    SELECT fiscal_year, sold_quantity, EXTRACT(MONTH FROM date) AS month
+    FROM fact_sales_monthly
 )
 SELECT 
-    SUM(SOLD_QUANTITY) AS total_sold_quantity,		
+    SUM(sold_quantity) AS total_sold_quantity,		
     CASE
-        WHEN `MONTH` IN (9,10,11) THEN 1
-        WHEN `MONTH` IN (12,1,2) THEN 2
-        WHEN `MONTH` IN (3,4,5) THEN 3
-        WHEN `MONTH` IN (6,7,8) THEN 4
-    END AS `QUARTER`
-FROM MAIN_TABLE
+        WHEN month IN (9,10,11) THEN 1
+        WHEN month IN (12,1,2) THEN 2
+        WHEN month IN (3,4,5) THEN 3
+        WHEN month IN (6,7,8) THEN 4
+    END AS quarter
+FROM main_table
 WHERE fiscal_year = 2020
-GROUP BY `QUARTER`
+GROUP BY quarter
 ORDER BY total_sold_quantity DESC;
+
 ```
 
 ### Output:  
@@ -376,26 +370,28 @@ This report identifies the **channel that contributed the most to gross sales** 
 ### Query:  
 ```sql
 WITH main_table AS (
-    SELECT dim_customer.`channel`, 
+    SELECT dim_customer.channel, 
            fact_sales_monthly.sold_quantity,
            fact_gross_price.gross_price,
            fact_sales_monthly.fiscal_year
     FROM dim_customer
-    JOIN fact_sales_monthly USING(customer_code)
-    JOIN fact_gross_price USING(product_code)
+    JOIN fact_sales_monthly USING (customer_code)
+    JOIN fact_gross_price USING (product_code)
 ),
 sell_table AS (
-    SELECT `channel`, 
+    SELECT channel, 
            SUM(sold_quantity * gross_price) AS gross_sales
     FROM main_table
     WHERE fiscal_year = 2021
-    GROUP BY `channel`
+    GROUP BY channel
 )
-SELECT `channel`,
-       ROUND(gross_sales / 1000000, 2) AS gross_sales_mln,
-       ROUND((gross_sales / ts) * 100, 2) AS percentage
-FROM sell_table, 
-     (SELECT SUM(gross_sales) AS ts FROM sell_table) AS tsell;
+SELECT 
+    sell_table.channel,
+    ROUND(gross_sales / 1000000.0, 2) AS gross_sales_mln,
+    ROUND((gross_sales / tsell.ts) * 100, 2) AS percentage
+FROM sell_table
+CROSS JOIN (SELECT SUM(gross_sales) AS ts FROM sell_table) AS tsell;
+
 ```
 
 ### Output:  
@@ -421,20 +417,24 @@ This report highlights the **top 3 products in each division** based on **total 
 ### Query:  
 ```sql
 WITH main_table AS (
-    SELECT product_code, product, division, SUM(sold_quantity) AS total_sold_quan
+    SELECT product_code, 
+           product, 
+           division, 
+           SUM(sold_quantity) AS total_sold_quan
     FROM dim_product
-    JOIN fact_sales_monthly USING(product_code)
+    JOIN fact_sales_monthly USING (product_code)
     WHERE fiscal_year = 2021
     GROUP BY product_code, product, division
 ), 
 rank_valu AS ( 
     SELECT *, 
-           RANK() OVER(PARTITION BY division ORDER BY total_sold_quan DESC) AS rank_order 
+           RANK() OVER (PARTITION BY division ORDER BY total_sold_quan DESC) AS rank_order 
     FROM main_table
 )
 SELECT * 
 FROM rank_valu
 WHERE rank_order <= 3;
+
 ```
 
 ### Output:  
@@ -483,16 +483,4 @@ This Power BI dashboard is part of the **Sales Analysis** project, which uses **
 - **Treemaps**: Showcasing top customers based on discount percentage.
 - **Line & Area Charts**: Sales performance over time.
 - **Custom Tables**: Detailed report views for better analysis.
-
-## 🚀 How to Use
-
-1. Connect Power BI to **MySQL Server**.
-2. Import the dataset using provided SQL queries.
-3. Load and refresh the Power BI report to view updated insights.
-
-
-
-
-
-
 
