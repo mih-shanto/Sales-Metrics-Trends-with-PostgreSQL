@@ -459,28 +459,3 @@ WHERE rank_order <= 3;
 
 ---
 
-# Sales Analysis - Power BI Dashboard
-
-## 📌 Overview
-
-This Power BI dashboard is part of the **Sales Analysis** project, which uses **MySQL Server** as the data source. The project focuses on analyzing sales performance using interactive visualizations.
-
-## 📊 Key Insights & Visualizations
-
-- **Gross Sales Analysis**: Monthly and yearly trends for customer **Atliq Exclusive**.
-- **Top 5 Customers**: Customers with the highest pre-invoice discount percentage for **FY 2021** in the Indian market.
-- **Profit Percentage Calculation**: DAX measures to compute profit margins.
-- **Dynamic KPI Cards**: Tracking total sales, profit, and growth trends.
-
-## 🛠️ Data Source
-
-- **Database**: MySQL Server
-- **ETL**: Data extracted via MySQL queries and connected to Power BI for reporting.
-
-## 📈 Best Visualizations Used
-
-- **Heatmaps**: To highlight sales fluctuations across months and years.
-- **Treemaps**: Showcasing top customers based on discount percentage.
-- **Line & Area Charts**: Sales performance over time.
-- **Custom Tables**: Detailed report views for better analysis.
-
